@@ -1,0 +1,2 @@
+1. I do expect token-based ngram to do better. Because a token-based model could learn the grammar,
+ semantic of the language from training strings. In a language, the sequence between words could imply many 
