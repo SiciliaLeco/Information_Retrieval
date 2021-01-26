@@ -40,3 +40,5 @@ I suggest that I should be graded as follows:
 
 <Please list any websites and/or people you consulted with for this
 assignment and state their role>
+
+the method of operating "other" labels is inspired by: https://github.com/NavePnow/CS3245-Information-Retrieval-NUS/blob/master/HW_%231/build_test_LM.py

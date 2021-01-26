@@ -103,7 +103,7 @@ def build_LM(in_file):
     # count 4gram finish
     return LM
 
-def calc_Prob(LM, prev_word, word, inst, V):
+def calc_Prob(LM, prev_word, word, inst, V, mis_count):
     '''
     a function used to calculate a single probability from given LM
     :param LM:
@@ -126,15 +126,32 @@ def calc_Prob(LM, prev_word, word, inst, V):
 
     if(tmpDict.__contains__(word) == False):
         prob = (0 + 1) / V
+        mis_count += 1
     elif(tmpDict[word].__contains__(prev_word) == False):
         prob = (0 + 1) / (V + cW)
+        mis_count += 1
     else:
         prob = (tmpDict[word][prev_word] + 1) / (V + cW)
 
-    return prob * 100# augment the probability to make convenient to compare
+    return prob * 100, mis_count # augment the probability to make convenient to compare
 
-def judge_Language_Type(a,b,c):
-    if((a > b) and (a > c)):
+def judge_Language_Type(a,b,c,miscount, tot):
+    '''
+    this is to judge the language type by the calculated probability,
+    as for "other" label, it is detemined by the miss rate of the 4-gram in test string,
+    that is:
+    if the 4gram that don't belong to my LM,then it is treated as alien gram.
+    if there are too many 4grams don't belong to my LM, it shows that doesn't belong to the 3 language
+    :param a, b, c: three probability results
+    :param miscount: the number that the 4-gram in the test string that dont belong to my LM
+    :param tot: length of the test string
+    :return:
+    '''
+    bound = 2.5
+    misrate = miscount / tot
+    if misrate > bound:
+        return "other"
+    elif((a > b) and (a > c)):
         return "malaysian"
     elif((b > a) and (b > c)):
         return "indonesian"
@@ -156,18 +173,23 @@ def test_LM(in_file, out_file, LM):
             line = line.strip()
             set_lst = set(line)
             V_lst = len(set_lst)  # V size
-            begin, end = 0, 3
+            begin, end = 0, 3 # gram size = 4
             p_malay, p_indo, p_temil = 1, 1, 1
+            mis_count = 0
             while(end < len(line)):
                 prev_word = "".join(line[begin:end])
-                p_malay *= calc_Prob(LM, prev_word, line[end], 0, V_lst)
-                p_indo *= calc_Prob(LM, prev_word, line[end], 1, V_lst)
-                p_temil *= calc_Prob(LM, prev_word, line[end], 2, V_lst)
+                p1, mis_count = calc_Prob(LM, prev_word, line[end], 0, V_lst, mis_count)
+                p_malay *= p1
+                p2, mis_count = calc_Prob(LM, prev_word, line[end], 1, V_lst, mis_count)
+                p_indo *= p2
+                p3, mis_count = calc_Prob(LM, prev_word, line[end], 2, V_lst, mis_count)
+                p_temil *= p3
                 begin += 1
                 end += 1
-            pred_lst.append(judge_Language_Type(p_malay, p_indo, p_temil) + " " + line)
-            print(math.log10(p_malay), math.log10(p_indo), math.log10(p_temil))
-            print(judge_Language_Type(p_malay, p_indo, p_temil)) #debug
+            pred_lst.append(judge_Language_Type(math.log10(p_malay), math.log10(p_indo), math.log10(p_temil), mis_count, len(line)) + " " + line)
+            # print(math.log10(p_malay), math.log10(p_indo), math.log10(p_temil))
+            # print(judge_Language_Type(p_malay, p_indo, p_temil, mis_count, len(line))) #debug
+            # print(mis_count/ len(line))
 
     with open(out_file, "w") as fout: # write result to the file
         for pred in pred_lst:
