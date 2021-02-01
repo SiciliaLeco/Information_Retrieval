@@ -22,32 +22,26 @@ class lang_Model:
         self.idndict = {}
         self.tmidict = {}
 
-    def count_mlysize(self, key):
+    def count_mlysize(self):
         '''
-        the following three count function is used to count
-        the frequency that key occurs in LM
+        the following three count functions are used to count
+        vocabulary size in each lang model.
         '''
         size = 0
-        if(self.mlydict.__contains__(key) == False):
-            return 0
-        for key2 in self.mlydict[key]:
-                size += self.mlydict[key][key2]
+        for key in self.mlydict.keys():
+            size += self.mlydict[key]
         return size
 
-    def count_idnsize(self, key):
+    def count_idnsize(self):
         size = 0
-        if(self.idndict.__contains__(key) == False):
-            return 0
-        for key2 in self.idndict[key]:
-                size += self.idndict[key][key2]
+        for key in self.idndict.keys():
+            size += self.idndict[key]
         return size
 
-    def count_tmisize(self,key):
+    def count_tmisize(self):
         size = 0
-        if(self.tmidict.__contains__(key) == False):
-            return 0
-        for key2 in self.tmidict[key]:
-                size += self.tmidict[key][key2]
+        for key in self.tmidict.keys():
+            size += self.tmidict[key]
         return size
 
 
@@ -75,15 +69,14 @@ def count_Freq(tag, str, LM):
 
     while(end < len(str)):
         prev_word = "".join(str[begin:end])
+        gram = prev_word + str[end]
+        # print(gram)
         # print(str[end] + " | " + str[begin:end]) #debug
-        if (tempDict.__contains__(str[end]) == False):
+        if (tempDict.__contains__(gram) == False):
             # initialize if don't have dict
-            tempDict[str[end]] = {}
-        elif (tempDict[str[end]].__contains__(prev_word) == False):
-            # initialize if the 4gram appears in the first time
-            tempDict[str[end]][prev_word] = 1
+            tempDict[gram] = 1
         else:
-            tempDict[str[end]][prev_word] += 1
+            tempDict[gram] += 1
         begin += 1
         end += 1
 
@@ -105,45 +98,71 @@ def build_LM(in_file):
             if(tag == "malaysian"):
                 LM.mlydict = count_Freq(tag, str, LM)
             elif(tag == "tamil"):
-                LM.midict = count_Freq(tag, str, LM)
+                LM.tmidict = count_Freq(tag, str, LM)
             elif(tag == "indonesian"):
                 LM.idndict = count_Freq(tag, str, LM)
     # count 4gram finish
+    print("language models finished!")
     return LM
 
-def calc_Prob(LM, prev_word, word, inst, V, mis_count):
+
+def calc_miss(LM, str):
+    '''
+    this method is to calculate how many 4gram in the given string
+    are not in the LM, and return the value
+    :param LM: my language model
+    :param str: the given test string
+    :return: the miss frequency that the given string happens
+    '''
+    begin, end = 0, 3
+    ma_miss, in_miss, tm_miss = 0, 0, 0 # initialize counting result
+    while end < len(str):
+        tmpword = str[begin:end+1]
+        if (LM.mlydict.__contains__(tmpword) == False):
+            ma_miss += 1
+        if (LM.idndict.__contains__(tmpword) == False):
+            in_miss += 1
+        if (LM.tmidict.__contains__(tmpword) == False):
+            tm_miss += 1
+        begin += 1
+        end += 1
+    return ma_miss, in_miss, tm_miss
+
+
+def calc_Prob(LM, word, inst, ml_miss, in_miss, dm_miss):
     '''
     a function to calculate a single probability from given LM
-    :param LM:
-    :param prev_word:
-    :param word:
-    :param inst: 0~malay 1~indon 2 ~ tamil
+    :param LM: my lang model
+    :param word: the 4gram word to be calculated
+    :param inst: instruction on which language to test
+        0 ~ malay, 1 ~ indo, 2 ~ demil
+    :param ml_miss: miss frequency of the string
+    :param in_miss:
+    :param dm_miss:
     :return:
     '''
     # initialize for prob and cW
-    prob = 1
-    cW = 0
+    prob, V, cW = 1, 0, 0
     if(inst == 0):
         tmpDict = LM.mlydict
-        cW = LM.count_mlysize(word)
+        V = LM.count_mlysize()
+        cW = ml_miss + len(LM.mlydict)
     elif inst == 1:
         tmpDict = LM.idndict
-        cW = LM.count_idnsize(word)
+        V = LM.count_idnsize()
+        cW = in_miss + len(LM.idndict)
     else:
         tmpDict = LM.tmidict
-        cW = LM.count_tmisize(word)
+        V = LM.count_tmisize()
+        cW = dm_miss + len(LM.tmidict)
 
     ## add-1 smoothing process
     if(tmpDict.__contains__(word) == False):
-        prob = (0 + 1) / V
-        mis_count += 1
-    elif(tmpDict[word].__contains__(prev_word) == False):
         prob = (0 + 1) / (V + cW)
-        mis_count += 1
     else:
-        prob = (tmpDict[word][prev_word] + 1) / (V + cW)
+        prob = (tmpDict[word] + 1) / (V + cW)
 
-    return prob * 100, mis_count # augment the probability to make convenient to compare
+    return math.log10(prob)  # augment the probability to make convenient to compare
 
 def judge_Language_Type(a,b,c,miscount, tot):
     '''
@@ -159,6 +178,7 @@ def judge_Language_Type(a,b,c,miscount, tot):
     :return:
     '''
     bound = 2.5
+    # value of bound is determined by my observation of the test set
     misrate = miscount / tot
     if misrate > bound:
         return "other"
@@ -168,6 +188,8 @@ def judge_Language_Type(a,b,c,miscount, tot):
         return "indonesian"
     elif((c > a) and (c > b)):
         return "tamil"
+    else:
+        return "other"
 
 def test_LM(in_file, out_file, LM):
     """
@@ -182,26 +204,23 @@ def test_LM(in_file, out_file, LM):
     with open(in_file) as fin:
         for line in fin.readlines():
             line = line.strip()  # delete "\n"
-            set_lst = set(line) # use structure of set to avoid repeat elements
-            V_lst = len(set_lst)  # V size
             begin, end = 0, 3 # gram size = 4
-            p_malay, p_indo, p_temil = 1, 1, 1
-            mis_count = 0
+            p_malay, p_indo, p_temil = 0, 0, 0
+            ml_miss, in_miss, dm_miss = calc_miss(LM, line)
+            mis_count = ml_miss + in_miss + dm_miss
+
             while(end < len(line)):
                 ## calculate the probability
-                prev_word = "".join(line[begin:end])
-                p1, mis_count = calc_Prob(LM, prev_word, line[end], 0, V_lst, mis_count)
-                p_malay *= p1
-                p2, mis_count = calc_Prob(LM, prev_word, line[end], 1, V_lst, mis_count)
-                p_indo *= p2
-                p3, mis_count = calc_Prob(LM, prev_word, line[end], 2, V_lst, mis_count)
-                p_temil *= p3
+                gramword = "".join(line[begin:end+1]) # 4gram word
+                p_malay += calc_Prob(LM, gramword, 0, ml_miss, in_miss, dm_miss)
+                p_indo += calc_Prob(LM, gramword, 1, ml_miss, in_miss, dm_miss)
+                p_temil += calc_Prob(LM, gramword, 2, ml_miss, in_miss, dm_miss)
+
                 begin += 1
                 end += 1
-            pred_lst.append(judge_Language_Type(math.log10(p_malay), math.log10(p_indo), math.log10(p_temil), mis_count, len(line)) + " " + line)
-            # print(math.log10(p_malay), math.log10(p_indo), math.log10(p_temil))
+            # print(p_malay, p_indo,p_temil)
             # print(judge_Language_Type(p_malay, p_indo, p_temil, mis_count, len(line))) #debug
-            print(mis_count/ len(line))
+            pred_lst.append(judge_Language_Type(p_malay, p_indo, p_temil, mis_count, len(line)) + " " + line)
 
     with open(out_file, "w") as fout: # write result to the file
         for pred in pred_lst:

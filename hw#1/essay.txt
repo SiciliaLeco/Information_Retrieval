@@ -1,2 +1,19 @@
-1. I do expect token-based ngram to do better. Because a token-based model could learn the grammar,
+1.In the homework assignment, we are using character-based ngrams, i.e., the gram units are characters. Do you expect token-based ngram models to perform better?
+I do expect token-based ngram to do better. Because a token-based model could learn the grammar,
  semantic of the language from training strings. In a language, the sequence between words could imply many 
+
+2. What do you think will happen if we provided more data for each category for you to build the language models? What if we only provided more data for Indonesian?
+I think more data can improve our LMs because the possibility would generally close to the real possibility.
+If we only provide more data for Indonesian, the lM for Indonesian would be more convincing,
+and the probability for some 4grams in Indonesian might increase since it could appear more in Indonesian,
+so the unbalanced trained LMs might cause a lot of test strings to be categorized as Indonesian.
+
+3. What do you think will happen if you strip out punctuations and/or numbers? What about converting upper case characters to lower case?
+I think punctuations and upper case characters all have their semantic meanings.
+Puncutations could imply where the gram is (i.e: ".", "!", "?" represents the end of a sentence)
+Upper case can also imply the start of a sentence.
+Hence, stripping out these information might decrease the accuracy of our model.
+
+4. We use 4-gram models in this homework assignment. What do you think will happen if we varied the ngram size, such as using unigrams, bigrams and trigrams?
+A 4-gram model connect a character to 3 more of its previous characters and can generalize more useful information.
+If we only use bigram or unigram, the result might not be that true.
