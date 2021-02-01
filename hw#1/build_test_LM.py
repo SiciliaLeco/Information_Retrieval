@@ -17,16 +17,21 @@ class lang_Model:
     '''
     def __init__(self):
         ## dictionary to store 4-gram data
+        ## for malay, idone and temil.
         self.mlydict = {}
         self.idndict = {}
         self.tmidict = {}
 
     def count_mlysize(self, key):
+        '''
+        the following three count function is used to count
+        the frequency that key occurs in LM
+        '''
         size = 0
         if(self.mlydict.__contains__(key) == False):
             return 0
         for key2 in self.mlydict[key]:
-                size += 1
+                size += self.mlydict[key][key2]
         return size
 
     def count_idnsize(self, key):
@@ -34,7 +39,7 @@ class lang_Model:
         if(self.idndict.__contains__(key) == False):
             return 0
         for key2 in self.idndict[key]:
-                size += 1
+                size += self.idndict[key][key2]
         return size
 
     def count_tmisize(self,key):
@@ -42,7 +47,7 @@ class lang_Model:
         if(self.tmidict.__contains__(key) == False):
             return 0
         for key2 in self.tmidict[key]:
-                size += 1
+                size += self.tmidict[key][key2]
         return size
 
 
@@ -50,7 +55,8 @@ class lang_Model:
 def count_Freq(tag, str, LM):
     '''
     count the frequency of every 4-gram, store into its dict
-    dict is deciede by tag, str is text
+    dict is deciede by tag, str is text.
+    this is used by build_LM function
     :param tag:
     :param str:
     :return:
@@ -71,8 +77,10 @@ def count_Freq(tag, str, LM):
         prev_word = "".join(str[begin:end])
         # print(str[end] + " | " + str[begin:end]) #debug
         if (tempDict.__contains__(str[end]) == False):
-            tempDict[str[end]] = {}  # initialize dict for it
+            # initialize if don't have dict
+            tempDict[str[end]] = {}
         elif (tempDict[str[end]].__contains__(prev_word) == False):
+            # initialize if the 4gram appears in the first time
             tempDict[str[end]][prev_word] = 1
         else:
             tempDict[str[end]][prev_word] += 1
@@ -93,7 +101,7 @@ def build_LM(in_file):
     with open(in_file) as f:
         for line in f.readlines():
             tag = line.split(" ")[0] # split the corpus by " " and get tag info
-            str = " ".join(line.split(" ")[1:]) # get sentence by deleting tag
+            str = " ".join(line.split(" ")[1:]) # get sentence by deleting tag(label)
             if(tag == "malaysian"):
                 LM.mlydict = count_Freq(tag, str, LM)
             elif(tag == "tamil"):
@@ -105,13 +113,14 @@ def build_LM(in_file):
 
 def calc_Prob(LM, prev_word, word, inst, V, mis_count):
     '''
-    a function used to calculate a single probability from given LM
+    a function to calculate a single probability from given LM
     :param LM:
     :param prev_word:
     :param word:
     :param inst: 0~malay 1~indon 2 ~ tamil
     :return:
     '''
+    # initialize for prob and cW
     prob = 1
     cW = 0
     if(inst == 0):
@@ -124,6 +133,7 @@ def calc_Prob(LM, prev_word, word, inst, V, mis_count):
         tmpDict = LM.tmidict
         cW = LM.count_tmisize(word)
 
+    ## add-1 smoothing process
     if(tmpDict.__contains__(word) == False):
         prob = (0 + 1) / V
         mis_count += 1
@@ -140,8 +150,9 @@ def judge_Language_Type(a,b,c,miscount, tot):
     this is to judge the language type by the calculated probability,
     as for "other" label, it is detemined by the miss rate of the 4-gram in test string,
     that is:
-    if the 4gram that don't belong to my LM,then it is treated as alien gram.
-    if there are too many 4grams don't belong to my LM, it shows that doesn't belong to the 3 language
+    if the 4gram don't belong to my LM, then it is treated as alien gram.
+    if there are too many alien 4grams, it shows that doesn't belong to the 3 language
+    the threshold value is determined by param@bound
     :param a, b, c: three probability results
     :param miscount: the number that the 4-gram in the test string that dont belong to my LM
     :param tot: length of the test string
@@ -167,16 +178,17 @@ def test_LM(in_file, out_file, LM):
     print("testing language models...")
     # This is an empty method
     # Pls implement your code below
-    pred_lst = []
+    pred_lst = [] # store result
     with open(in_file) as fin:
         for line in fin.readlines():
-            line = line.strip()
-            set_lst = set(line)
+            line = line.strip()  # delete "\n"
+            set_lst = set(line) # use structure of set to avoid repeat elements
             V_lst = len(set_lst)  # V size
             begin, end = 0, 3 # gram size = 4
             p_malay, p_indo, p_temil = 1, 1, 1
             mis_count = 0
             while(end < len(line)):
+                ## calculate the probability
                 prev_word = "".join(line[begin:end])
                 p1, mis_count = calc_Prob(LM, prev_word, line[end], 0, V_lst, mis_count)
                 p_malay *= p1
@@ -189,11 +201,12 @@ def test_LM(in_file, out_file, LM):
             pred_lst.append(judge_Language_Type(math.log10(p_malay), math.log10(p_indo), math.log10(p_temil), mis_count, len(line)) + " " + line)
             # print(math.log10(p_malay), math.log10(p_indo), math.log10(p_temil))
             # print(judge_Language_Type(p_malay, p_indo, p_temil, mis_count, len(line))) #debug
-            # print(mis_count/ len(line))
+            print(mis_count/ len(line))
 
     with open(out_file, "w") as fout: # write result to the file
         for pred in pred_lst:
             fout.write(pred+"\n")
+
 def usage():
     print(
         "usage: "
