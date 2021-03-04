@@ -1,0 +1,37 @@
+I AND her
+BAHIA
+BAHIA AND COCOA
+BAHIA OR COCOA
+BAHIA AND COCOA AND SHOWER
+BAHIA AND COCOA AND NOT SHOWER
+NOT BAHIA AND COCOA
+dean OR kenneth OR douglas
+(dean OR kenneth OR douglas) AND dean
+grower AND NOT relief
+I
+will
+is
+her
+I AND NOT will
+I AND NOT is
+I AND NOT her
+cry
+cocoa
+absolute
+overproduced
+notices
+pretend
+overproduced OR notice OR pretend
+implementation AND the AND NOT it
+without AND place
+without AND it OR a AND place
+(come AND dream) OR NOT NOT (test AND and) OR NOT NOT NOT (mine AND data) OR (mere AND dram)
+come AND dream OR NOT NOT test AND and OR NOT NOT NOT mine AND data OR mere AND dram
+(come AND dream) OR NOT NOT (test AND and) OR mine AND (data OR mere AND dram)
+(come AND dream OR NOT NOT test AND and) OR NOT (mine AND data) OR (mere AND dram)
+come AND NOT dream AND NOT test AND NOT mine AND NOT data
+come AND NOT (dream AND NOT test AND NOT mine AND NOT data)
+come AND NOT (dream AND NOT test OR NOT mine) AND NOT data
+come AND NOT dream AND NOT test OR NOT mine AND NOT data
+come AND NOT dream AND NOT test OR NOT (mine AND NOT data)
+(come AND NOT dream) AND (NOT test AND NOT mine) OR NOT data

@@ -1,0 +1,16 @@
+1. 
+1) I think it's good to remove the meaningless numbers which normally won't be queried, which would save some space and increase the search speed. 
+2) A possible way to normalize the numbers is that we try to remove the meaningless (random) numbers and find the basic formats of the meaningful numbers such as episode numbers, special numbers in maths and so on and normalize these meaningful numbers to their basic number formats we defined. 
+3) Since we define the number of docIDs stored in the dictionary as the memory size occupied, we totally use up 561245 before removing the numbers and 55172 after we removing the numbers. Thus, the percentage of reduction in disk storage is (561245-55172)/561245, which is about 90%.
+
+2. 
+1) I think the dictionary and posting files would largely shrink and the search speed would be increased if we remove stop words. 
+2) However, the boolean search queries containing stopwords may be less precise or even impossible. Though rarely, users may still perform some queries containing stopwords such as "to be or not to be".
+
+3.
+1) 
+   For sent_tokenize(): Full stops are not always considered as the ends of sentences. Sometimes, sentences would not be correctly tokenized if the full stop is followed by a lower case letter and with a number at the front. For example, nltk.sent_tokenize("This is first sent 1. second sent") gives ['This is first sent 1. second sent'] where the second sentence with the first letter lower-case mistakenly is not recognized.
+   For word_tokenize(): Some shorthands for common words containing the punctuation ' like God's, isn't, and I'm will be tokenized as ["God", "'s"], ["is", "n't"], and ["I", "'m"], which normally would not be queried by the users. 
+2) 
+   For sent_tokenize(): We could enforce special rules for sentence termination checking to distinguish whether the full stops indicate the ends of sentences by grammar and allow some common errors like the first letter in the sentence is not capitalised.
+   For word_tokenize(): We could get back the original forms of the words, for example, get ["God", "is"] from God's, ["is", "not"] from isn't, and ["I", "am"] from ["I'm"] which is more recognizable and normally used in user queries.
