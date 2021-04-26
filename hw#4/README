@@ -1,0 +1,232 @@
+This is the README file for A0164627Y-A0190339B-A0229596L-A0228878H's submission
+We can be contacted via:
+e0148669@u.nus.edu
+e0325923@u.nus.edu 
+e0680464@u.nus.edu
+e0675841@u.nus.edu
+
+== Python Version ==
+
+We're using Python Version 3.8.5 for this assignment.
+
+== General Notes about this assignment ==
+
+Give an overview of your program, describe the important algorithms/steps 
+in your program, and discuss your experiments in general.  A few paragraphs 
+are usually sufficient.
+
+1. System Overview
+
+Our system builds phrasal indexes with positional lists incorporated with zone information, compresses the index by gap encoding,  and stores them into the dictionary.txt and postings.txt by SPIMI two-way merge during the index process. It implements boolean query (possibly with phrasal query) and free text query (possibly with phrasal query) with query refinement by Rocchio algorithm and query expansion by nltk.wordnet during the search process.
+
+
+2. System Architecture
+
+2.1 Index
+
+2.1.1 Data structures
+
+dictionary.txt contains two pickle objects:
+Length:
+{
+doc_id: ((length, [(term, weighted tf]), 
+   court_importance
+ ),
+...
+}
+
+Dictionary:
+{
+term: TermInfo object,
+...
+}
+
+Specifically, a TermInfo object consists of the following
+Document frequency
+Start pointer to posting list
+End pointer to posting list
+
+postings.txt contains a list of posting lists.
+Each posting list is a list of tuples where each tuple represents (gap, tf, position list).
+
+2.1.2 Indexing process
+
+For the indexing process, we are building the index from the dataset.csv, generating the postings.txt and dictionary.txt in the end. While doing so, we calculated the length and term weights information for each document and recorded it in the dictionary.txt. The court importance is also stored to enable us to easily incorporate quality scores.
+
+To generate these documents, we first read data from the dataset. Apart from the document ID, the dataset has 4 attributes: title, content, time, court which we consider them as zones. Since the structures in content are different across different jurisdiction, we won't consider them for zones. We read and preprocess the text in each zone separately. Since terms in different zones may be of different importance to relevance, we manually set the term frequency increment for each zone when a token is encountered. 
+
+Initially, we consider storing the zone index with the information at the postings level. Since we don't have zone-specific query, we thought storing zone information at the postings level is better than at the dictionary level, which not only keeps the in-memory dictionary small but also is faster for free text search. However, we found it would be too expensive to incorporate in zone information in this way since we need to introduce one additional level for zones and users even don't input zone-specific queries. Thus, we incorporate the zone information by setting different weights for one token in different zones instead of implementing the zone index in the postings to distinguish their importances of relevance across zones.
+
+To preprocess the tokens, we removed non ascii characters like Chinese characters and some special punctuations. We also removed some html tags. After which, we tokenized the sentences into words, stripped the trailing and leading punctuations in them, and filter the stopwords (nltk.corpus.stopwords and English letters). 
+
+In addition, we went through all the terms in each document, recorded each term’s document frequency, term frequencies, and position lists(position is used for phrasal queries).
+
+For “court”, we assigned an importance score to each court, based on the given court information in “Notes about Court Hierarchy”. In particular, ‘Most important’, ‘?Important?’, ‘The rest’ are given 2, 1 and 0 labels respectively. 
+
+Finally, we calculated the lengths for document and stored the term-weight vectors for (which is used for query refinement) all documents.Our code also implements SPIMI two-way merge to merge the dictionaries and postings.
+
+2.1.3 Index compression
+
+We experimented with several ways of index compression for pickled objects.
+
+Initially, we considered compressing the dictionary as we realised that for a string to be pickled, we need an additional 15 bytes. For instance, if we want to store “hello”, which takes 5 bytes, the pickled string will in fact take 20 bytes. As such, we needed to compress the dictionary because of the additional cost associated with storing a new string. In other words, the motivation for compressing the dictionary differs from that mentioned in the lecture, in which fixed-width terms posed a problem. After much experimentation, we decided to abandon dictionary compression because we realised that the bottleneck is not in the dictionary but the postings. Moreover, the cost of storing an integer as a pickle is pretty high. In view of the fact that a pickled integer takes up 15 bytes and the total length of the strings is extremely long, the cost savings from storing fewer strings will easily be outweighed by the cost of storing the pointers to the dictionary-as-a-string.
+
+In addition, we attempted compressing the integers, which will also be useful for compression
+of postings, if successful, using variable byte encoding (https://github.com/utahta/pyvbcode) but from our trials, the space taken up by a pickled-variable-encoded integer increased. Hence, we abandoned this idea as well.
+
+Lastly, we tried gap encoding. This successfully reduced the space taken by our postings list by a significant margin. Given that the document IDs are large numbers, this observation was not very surprising. Admittedly, the savings was not as large as we had hoped for because the document IDs are rather sparse in nature. To perform gap encoding, we loaded the postings list for each term, one at a time, after all the postings lists were merged (via SPIMI). Then, we computed the gap between adjacent postings in the postings list. With the exception of the first posting of each list, the gaps, rather than the document IDs, are stored. During query time, we then ‘re-construct’ the postings list by computing the actual document ID of each posting immediately after loading the postings list to memory.
+
+2.2 Search
+
+2.2.1 Parameters
+
+The following are some parameters used during retrieval:
+
+1) Parameters for pseudo relevance feedback
+- K_DOCS = 10 # Number of relevant docs to consider
+- K_TERMS = 10 # Number of most frequent terms to consider for each relevant document
+- ALPHA = 1 # Coefficient for Rocchio algorithm
+- BETA = 0.75 # Coefficient for Rocchio algorithm
+
+2) Parameter for phrase queries
+PHRASE_WEIGHT = 0.95 # Denotes the importance of terms that belong to the exact phrase as compared to terms that do not belong the exact phrase
+
+3) Parameters for quality scoring
+- QUALITY_WEIGHT = 0.05
+- QUALITY_SCORE = {
+   	0 : 0.7,
+   	1 : 0.9,
+   	2 : 1
+}
+
+More details about the parameters can be found in later sections.
+
+2.2.2 Free text queries
+
+A free text query is one which does not contain “AND”. 
+
+During query parsing, we split the query by whitespace and tokenize each term and extracted the phrases. (Note that during tokenization, the preprocessing step performed is very similar to that done during indexing.) While parsing, we also record the frequency count of each token.
+
+Next, we performed query expansion with WordNet and used the vector space model to compute cosine similarity score between query and documents. Only the top K_DOCS (i.e. those with the highest cosine similarity score) are kept. They are further used for pseudo relevance feedback and to obtain the refined query using the Rocchio algorithm. Then, we recomputed the cosine similarity scores using the refined query.
+
+If the free text query contains phrase queries (e.g. “a b” c d), we append the results from the refined query to the previous results. (In other words, the initial rankings will not be affected by the refined query) Otherwise, directly return the ranked results from the refined query.
+
+2.2.3 Boolean queries
+
+Since a boolean query is one which contains “AND”, we separate them by “AND” . Then, besides the fact that duplicated query terms are ignored (as a consequence, we do not care about the frequency count as well), the remaining process is the same as that for free-text query.
+
+Next, we perform query expansion with WordNet. For instance, if the initial query is A AND B, and we found synonyms C and D for A and B, respectively, we will execute the boolean retrieval (A or C) AND (B or D). The order of query processing is also optimised by estimating the result size of each OR operator, and sorting the operations in increasing size to reduce the overall computation for AND operators.
+
+We then used the vector space model to compute cosine similarity score between query and documents.
+
+If there are insufficient docs for relevance feedback, we use the vector space models to retrieve remaining docs and append the newly found docs to the previous results to ensure that docs that match exactly with the boolean query would always be ranked highly in the results.
+
+The top K_DOCS are used for pseudo relevance feedback. Next, we obtain the refined query using the Rocchio algorithm. Then, we recompute the cosine similarity scores for the refined query using vector space model
+
+Finally, we append the newly found documents to previous results and return final results
+
+2.2.4 Phrase queries
+
+For phrase queries, we make use of positional information from the posting list to determine whether the exact phrase is present in a document. The algorithm used is similar to the intersection algorithm used for AND operation. During the intersection, relevant information such as document frequency for the phrase as well as phrase frequency in each document is kept for the calculation of cosine similarity score later.
+
+Phrase queries can be both present in free text queries and boolean queries. For both types of queries, we want the documents with the exact phrases to be ranked as high as possible. As such, we modified the standard way of calculating of cosine similarity score to make sure:
+docs with the exact phrase are ranked higher than those with only terms in the phrase at different positions
+phrase queries carry more weight than normal single query terms
+
+For example, given a query “a b” AND c, instead of using document frequency of “a” and “b” as to calculate the tf-idf. Instead, we used the document frequency of the phrase “a b” to calculate the tf-idf. In this way, this increases the weight of phrase queries over single term queries as the document frequency of a multi-word phrase is usually much lower compared to a single word. Next, when iterating through the posting list of “a b”, for each document, instead of using the tf of “a” and “b” in the document to calculate the weighted tf, we use an adjusted tf. For example, for term “a”, its adjusted tf is equal to PHRASE_WEIGHT  * (phrase frequency of “a b”) + (1 - PHRASE_WEIGHT ) * (tf of “a” - phrase frequency of “a b”). The intuition behind this is that the occurrences of “a” that belong to a “a b” carries more weight than those occurrences of “a” which is not followed by “b”.
+
+2.2.5 Scoring and ranking
+
+We used the ltc.lnc scheme for the calculation of weight for query and document vectors. After calculating the cosine similarity score. In addition to the cosine similarity score, we incorporated quality score to put more weight on docs from important courts as we assumed that given two documents, users would prefer the document from a more important court given that both documents share similar cosine similarity score. However, we set the value of QUALITY_WEIGHT to be very small. It can be considered as a way to break ties for documents that share almost the same cosine similarity score.
+
+The most important course are given a court_importance value of 2, those somewhat important courts are given 1, and the rest of the courts are given value 0. The overall scoring function is as follows:
+QUALITY_WEIGHT * (QUALITY_SCORE[court_importance]) + (1 - QUALITY_WEIGHT) * cosine similarity score
+
+3. Evaluation of Retrieval Techniques
+
+Below is just a brief description of query refinement techniques used in our system. Refer to BONUS.docs for more details.
+
+3.1 Pseudo relevance feedback
+
+We implemented pseudo relevance feedback for query refinement. For both boolean queries and phrase queries, after the initial round of query. We take the top K_DOCS documents from the initial results and use the Rocchio algorithm to compute the refined query vector with alpha and beta coefficients set to ALPHA and BETA respectively. 
+
+Since it would be rather expensive to consider all terms in the top K_DOCS documents. To save computation time, we only considered and calculate the weight for the top K_TERMS most frequent terms from each of the relevant documents. For query weights, we used tf-idf weight (same as the weight used in calculating cosine similarity score). For document weights, instead of simply using weight tf, we calculated tf-idf for the top K_TERMS in the documents as well. As such, words that are common to all would be less likely to be added to the refined query vector. 
+
+More observation and evaluation of pseudo relevance feedback can be found in BONUS.docx. Generally, pseudo relevance feedback helps improve the recall value, but it the relevant documents selected are not truly relevant, the rankings would be affected. 
+
+3.2 Query expansion with WordNet
+
+Query expansion is to have additional input words or phrases in the query sentences. In our work, we used WordNet in NLTK to implement the Thesaurus-based query expansion. This is to expand the query with synonyms and related words. 
+
+Further elaborating, we first generate the synonym sets for the input term by wordnet. However, we can always get many synonyms for one term, we cannot use all of these synonyms because this might lead us to many irrelevant documents. WordNet was just to provide some suggestions of synonyms but not always right. So we cannot retrieve all of them. 
+
+For all the terms, we insert them into the tokenize function (tokenize_word_enhanced) to make sure we are using the same processing method as in the indexing part. Here we filtered terms that are not in our dictionary to save calculation time. After all these filtering mechanisms, we finally got the output list. But to simplify calculation, we only retrieve the first 1 or 2 terms. 
+
+Then we apply these expanded terms for our search. We don’t use them in phrasal queries. For boolean queries like a AND b, we first get synonyms A, B  for a and b. Then our search query goes to : (A or a) AND (B or b). For free text query, we just simply append the synonyms in the query vector.
+
+4. Allocation of work
+Most of the algorithms were discussed together as a team.
+
+Nazhou: 
+Adapt parsing of boolean queries (from Homework 2) and free text queries (from Homework 3) 
+Implement phrase queries 
+Adapt the scoring function for ranked retrieval (from Homework 3) to rank query results for boolean queries as well as phrasal queries
+Implement Rocchio algorithm for query refinement
+Incorporate query expansion for boolean and free text queries
+
+Lin Wei:
+Implemented compression 
+Document code
+Refactoring code
+
+Li Qilin:
+Modify code from hw3, adapt the data structure to store position information in the postings list.
+Combine the length’s information and dictionary information in one document.
+Refine the preprocess part, remove html tags, non-ascii words and stopwords.
+Implement the query expansion
+
+HUANG Raoyi:
+Adapt codes from hw2 and hw3, adapt the data structure to preprocess texts in different zones.
+Incorporate zone information such as assigning different weights for term frequencies for different zones and quality scores for court.
+Document, refactor, and proofread the codes. Remove stopwords and alphabets in the dictionary.
+Help search resources for compression like variable gap encoding, query expansion like wordnet, Spacy, gensim etc
+
+== Files included with this submission ==
+
+List the files in your submission here and provide a short 1 line
+description of each file.  Make sure your submission's files are named
+and formatted correctly.
+
+- block.py: contains a class that represents a block
+- compression.py: contains helper functions that perform compression via gap encoding
+- create_blocks.py: contains helper methods that creates initial blocks and computes the length information (for Rocchio algorithm as well) and court importance of each document
+- dictionary_entry.py: contains a class that represents an entry in the dictionary (it stores the term, document frequency and pointer information)
+- dictionary.txt: contains the dictionary, and length information and court importance of each document of the dataset
+- index_util.py: contains commonly used helper methods that are used for indexing
+- index.py: contains driver method to perform the indexing
+- io_util.py: helper methods to retrieve dictionary and posting list
+- merge.py: contains helper methods that perform recursive merging of blocks
+- postings.txt: contains the postings lists of the dataset
+- query_expansion.py: contains a helper method that uses WordNet from nltk to generate synonyms for a given term
+- query_util.py: contains helper methods necessary for querying (e.g. those for computing tf, idf, cosine similarity scores, intersection and union of lists)
+- search_engine.py: contains a class which supports both boolean queries and free text queries
+- search.py: contains driver method to run a query on the specified dictionary and postings files
+- temp_dir_util.py: contains helper methods for managing temporary files/directories, and defines common temporary file paths used
+- term_info.py: contains a class that stores document frequency and pointer information
+- tokenizer.py: helper methods for tokenization
+-nltk_data/corpora/wordnet: This is the file that redirects our program to the helper library provided by nltk.
+
+== Statement of individual work ==
+
+Please put a "x" (without the double quotes) into the bracket of the appropriate statement.
+
+[x] I, A0164627Y-A0190339B-A0229596L-A0228878H, certify that I have followed 
+the CS 3245 Information Retrieval class guidelines for homework assignments.  
+In particular, I expressly vow that I have followed the Facebook rule in discussing
+with others in doing the assignment and did not take notes (digital or
+printed) from the discussions. 
+
+== References ==
+
+<Please list any websites and/or people you consulted with for this
+assignment and state their role>
